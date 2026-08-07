@@ -88,9 +88,8 @@ class DreamzeroDecoupledWbcAgent(SonicDecoupledWbcAgent):
         self._session_id = self._make_session_id()
         self._obs_frame_buffer: list[np.ndarray] = []
 
-        # Last high-level command sent to the low-level controller. Kept as
-        # part of the 32D proprio the policy expects (torso RPY + height).
-        self._last_cmd_torso_rpyh = np.array([0, 0, 0, 0.74], dtype=np.float32)
+        # last command (high level input to lower policy)
+        self._last_base_height_cmd = 0.74  # FIXME hardcoded for g1 wholebody, need to be more general in the future
         self._reset_history = True
 
         # Resolve the joint name order the WBC policy expects for the upper body.
@@ -179,9 +178,12 @@ class DreamzeroDecoupledWbcAgent(SonicDecoupledWbcAgent):
 
             # Reconstruct 32D Psi0-flat state from 43D env qpos + last torso cmd.
             proprio = observation["joint_qpos"][None]
+            waist_rpy = proprio[:, [13, 14, 12]]
             states = np.concatenate(
-                [proprio[:, s:e] for _, s, e in STATE_SLICES]
-                + [self._last_cmd_torso_rpyh[None]],
+                [proprio[:, s:e] for _, s, e in STATE_SLICES] + [
+                    waist_rpy,
+                    np.array([[self._last_base_height_cmd]], dtype=np.float32),
+                ],
                 axis=1,
             ).astype(np.float32)  # shape (1, 32)
             state_dict = {"states": states}
@@ -227,15 +229,6 @@ class DreamzeroDecoupledWbcAgent(SonicDecoupledWbcAgent):
 
         action_cmd = super().get_action(observation, instruction, **kwargs)
         if action_cmd.type == "vla_cmd":
-            # Capture torso command from the vla_cmd before WBC conversion strips it.
-            # JUNJIE: see if _last_cmd_torso_rpyh is actually changed
-            self._last_cmd_torso_rpyh = np.array([
-                action_cmd["target_upper_body_pose"]["waist_roll_joint"],
-                action_cmd["target_upper_body_pose"]["waist_pitch_joint"],
-                action_cmd["target_upper_body_pose"]["waist_yaw_joint"],
-                float(action_cmd["base_height_command"][0]),
-            ], dtype=np.float32)
-
             proprio = self.robot.prepare_obs()
             wbc_obs = self._build_wbc_observation(proprio)
             self._wbc_policy.set_observation(wbc_obs)
@@ -256,6 +249,7 @@ class DreamzeroDecoupledWbcAgent(SonicDecoupledWbcAgent):
                 "timestamp": t_now,
             }
             self._wbc_policy.set_goal(goal)
+            self._last_base_height_cmd = float(action_cmd["base_height_command"][0])
             wbc_action = self._wbc_policy.get_action(time=t_now)
             self._cached_target_q = self._dwbc_robot_model.get_body_actuated_joints(wbc_action["q"])
             self._cached_left_hand_q = self._dwbc_robot_model.get_hand_actuated_joints(wbc_action["q"], side="left")
@@ -290,4 +284,4 @@ class DreamzeroDecoupledWbcAgent(SonicDecoupledWbcAgent):
         self._last_pred_action = None
         self._reset_history = True
         self._obs_frame_buffer = []
-        self._last_cmd_torso_rpyh = np.array([0, 0, 0, 0.74], dtype=np.float32)
+        self._last_base_height_cmd = 0.74

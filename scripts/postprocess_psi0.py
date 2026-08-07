@@ -118,7 +118,7 @@ def build_vectors(proprio, cmd, history_cmd, action, target_yaw, turning_flag):
     # states: match to_psi0_state_format ordering
     states = np.concatenate(
         [proprio[:, s:e] for _, s, e in STATE_SLICES] + [
-            history_cmd[:to, 3:6][::-1],  # torso_rpy
+            history_cmd[:to, 3:6][:, ::-1],  # torso_rpy
             history_cmd[:to, 6:7]         # base height
         ],
         axis=1,
