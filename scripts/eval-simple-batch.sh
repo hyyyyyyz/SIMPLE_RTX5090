@@ -9,10 +9,10 @@
 #   PORT=22086 NUM_WORKERS=4 scripts/eval-simple-batch.sh
 #   SKIP_TASKS="" scripts/eval-simple-batch.sh       # include the excluded tasks
 #   FORCE=1 scripts/eval-simple-batch.sh              # rerun already-completed evals
-#   DRY_RUN=1 scripts/eval-simple-batch.sh            # resolve + print, launch nothing
+#   DRY_RUN=1 scripts/eval-simple-batch.sh            # print commands, launch nothing
 #
-# Dataset dir names do not always equal the registered gym env id (see the
-# resolution step below); the id actually used is printed as "env=" on each run.
+# Dataset dir names are expected to equal the registered gym env id; the check
+# below fails fast if one does not, rather than after Isaac Sim has booted.
 #
 # Runs that exit 0 are recorded under $MARKER_DIR and skipped on the next
 # invocation, so an interrupted batch can simply be restarted.
@@ -91,85 +91,44 @@ if [[ ${#task_list[@]} -eq 0 ]]; then
     exit 1
 fi
 
-# Dataset directories are named after the task as of capture time, but several
-# envs have since been renamed -- the CamelCase connectors "And"/"N" were dropped
-# from the dataset names (XMoveAndPick -> XMovePick, PickNPlace -> PickPlace).
-# Passing "simple/<dataset-dir>" straight to gym.make therefore dies with
-# gymnasium.error.NameNotFound, and only *after* Isaac Sim has finished booting.
-# Resolve every directory to a real env id here and fail fast if any cannot be.
-declare -A TASK_ENV=()
-resolved=$("$PYTHON" - "${task_list[@]}" <<'PY'
+# Every dataset directory is expected to name a registered env. Check that up
+# front: gym.make would otherwise raise NameNotFound only after Isaac Sim has
+# spent ~17s booting, once per worker.
+"$PYTHON" - "${task_list[@]}" <<'PY' || exit 1
 import difflib
-import re
 import sys
 
 import gymnasium as gym
 
 import simple.envs  # noqa: F401  -- registering simple/* is the import's purpose
 
-# Explicit dataset-dir -> env-id overrides. Each was confirmed by comparing the
-# dataset's meta/tasks.jsonl instruction against the env's task `description`.
-ALIASES = {
-    "G1WholebodyBendPickPlaceMP-v0": "G1WholebodyBendPickAndPlaceMP-v0",
-    "G1WholebodyBendPickPlaceOnSofaMP-v0": "G1WholebodyBendPickAndPlaceOnSofaMP-v0",
-    "G1WholebodyPickBendPlaceMP-v0": "G1WholebodyPickAndBendPlaceMP-v0",
-    "G1WholebodyPickPlaceMP-v0": "G1WholebodyPickNPlaceMP-v0",
-    "G1WholebodyXMoveHandoverMP-v0": "G1WholebodyXMoveAndHandoverMP-v0",
-    "G1WholebodyXMovePickMP-v0": "G1WholebodyXMoveAndPickMP-v0",
-}
-
 known = {k.split("/", 1)[1] for k in gym.registry if k.startswith("simple/")}
+missing = [task for task in sys.argv[1:] if task not in known]
 
-# Same rename rule as above, applied generically so future datasets that lag a
-# rename resolve on their own. Only ever used when it lands on exactly one env.
-def drop_connectors(name: str) -> str:
-    return re.sub(r"(?<=[a-z])(?:And|N)(?=[A-Z])", "", name)
-
-by_norm: dict[str, list[str]] = {}
-for env in known:
-    by_norm.setdefault(drop_connectors(env), []).append(env)
-
-unresolved = []
-for task in sys.argv[1:]:
-    if task in known:
-        env = task
-    elif task in ALIASES and ALIASES[task] in known:
-        env = ALIASES[task]
-    else:
-        candidates = by_norm.get(drop_connectors(task), [])
-        if len(candidates) != 1:
-            unresolved.append((task, candidates))
-            continue
-        env = candidates[0]
-    print(f"{task}\t{env}")
-
-if unresolved:
-    print("", file=sys.stderr)
-    for task, candidates in unresolved:
-        hint = candidates or difflib.get_close_matches(task, sorted(known), n=3, cutoff=0.6)
-        detail = f"ambiguous, matches {candidates}" if candidates else f"did you mean: {', '.join(hint) or '(no close match)'}"
-        print(f"error: no registered env for dataset dir '{task}' -- {detail}", file=sys.stderr)
+for task in missing:
+    hint = ", ".join(difflib.get_close_matches(task, sorted(known), n=3, cutoff=0.6))
     print(
-        "\nAdd the correct dataset-dir -> env-id pair to ALIASES in "
-        f"{sys.argv[0] or 'scripts/eval-simple-batch.sh'}, or drop the directory from $DATA_ROOT.",
+        f"error: no registered env 'simple/{task}' for dataset dir '{task}'"
+        f"{f' -- did you mean: {hint}' if hint else ''}",
+        file=sys.stderr,
+    )
+if missing:
+    print(
+        "\nRename the directory under $DATA_ROOT to match its env id, "
+        "or drop it.",
         file=sys.stderr,
     )
     sys.exit(1)
 PY
-) || exit 1
-
-while IFS=$'\t' read -r task env; do
-    [[ -n "$task" ]] && TASK_ENV["$task"]="$env"
-done <<<"$resolved"
-
-for task in "${task_list[@]}"; do
-    if [[ "${TASK_ENV[$task]}" != "$task" ]]; then
-        echo "[MAP ] $task -> simple/${TASK_ENV[$task]}"
-    fi
-done
 
 # Tasks excluded from the batch. Set SKIP_TASKS="" to run everything.
 SKIP_TASKS=${SKIP_TASKS-"
+G1WholebodyBendHandoverTeleop-v0
+G1WholebodyBendPickAndPlaceMP-v0
+G1WholebodyLocomotionPickBetweenTablesVariant5MP-v0
+G1WholebodyPickNPlaceMP-v0
+G1WholebodyXMoveAndHandoverMP-v0
+G1WholebodyXMoveAndPickMP-v0
 "}
 # shellcheck disable=SC2206  # intentional word splitting on whitespace/newlines
 skip_list=($SKIP_TASKS)
@@ -214,7 +173,7 @@ for task in "${task_list[@]}"; do
             continue
         fi
 
-        env_id="simple/${TASK_ENV[$task]}"
+        env_id="simple/$task"
 
         # Only cap episode length when asked; otherwise leave the CLI's None default
         # in place (passing "--max-episode-steps=None" would fail its int parsing).

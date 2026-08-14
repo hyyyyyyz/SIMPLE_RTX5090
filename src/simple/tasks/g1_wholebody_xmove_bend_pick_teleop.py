@@ -41,7 +41,7 @@ _LOWER_HEIGHT = 0.1
 
 @TaskRegistry.register("g1_wholebody_xmove_bend_pick_teleop")
 class G1WholebodyXMoveBendPickTaskTeleop(Task):
-    uid: str = "g1_sonic_xmove_bend_pick_teleop"
+    uid: str = "g1_wholebody_xmove_bend_pick_teleop"
     label: str = "G1 SONIC XMove Bend Pick Teleop Task"
     description: str = (
         "A task where the G1 robot must xmove to bend and pick up an object ."

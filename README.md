@@ -106,7 +106,9 @@ We offer three options for setting up SIMPLE:
 Prerequisits:
 ```
 sudo apt-get update
-sudo apt-get install curl cmake python3-dev
+sudo apt-get install curl cmake python3-dev ffmpeg
+sudo apt-get install gstreamer1.0-libav
+sudo apt-get install git-lfs && git lfs install && git lfs pull
 ```
 
 Install `uv` if not already done
