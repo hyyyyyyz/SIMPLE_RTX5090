@@ -49,6 +49,7 @@ class G1WholebodyXMoveAndPickMP(Task):
         "dr_level": 0,
         "version": 1.0,
         "need_gravity": True,
+        "max_episode_steps": 500,
     }
 
     robot_cfg: dict[str, Any] = dict(
@@ -137,7 +138,7 @@ class G1WholebodyXMoveAndPickMP(Task):
     dr_cfgs: dict[str, RandomizerCfg] = dict(
         language = LanguageDRCfg(
             instructions = [
-                "from the start position, move to the target position and pick up the object.",
+                "move forward and pick up the apple.",
             ]
         ),
 

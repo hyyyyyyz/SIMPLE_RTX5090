@@ -34,6 +34,7 @@ from simple.evals.tui import (
     WorkerProgress,
     make_console,
     render_progress,
+    ensure_cursor_restored_at_exit,
     restore_cursor,
     update_progress,
 )
@@ -129,6 +130,7 @@ def _run_eval_worker_entry(
     worker_kwargs: dict[str, Any],
     log_path: str | None,
     progress_conn: Any | None,
+    episode_cursor: Any | None = None,
 ):
     def report(payload: dict[str, Any]) -> None:
         if progress_conn is not None:
@@ -143,6 +145,7 @@ def _run_eval_worker_entry(
                     num_workers=num_workers,
                     worker_result_path=worker_result_path,
                     progress_reporter=report,
+                    episode_cursor=episode_cursor,
                 )
             except Exception:
                 report(
@@ -183,6 +186,7 @@ def _run_eval_worker(
     num_workers: int = 1,
     worker_result_path: str | None = None,
     progress_reporter: Callable[[dict[str, Any]], None] | None = None,
+    episode_cursor: Any | None = None,
 ):
     def persist_payload(kind: str, payload: Any):
         if not worker_result_path:
@@ -257,13 +261,39 @@ def _run_eval_worker(
 
     global_episode_indices = list(range(episode_start, dataset_size))
     global_episode_indices = global_episode_indices[:num_episodes]
-    episode_indices = global_episode_indices[worker_id::num_workers]
+
+    # Episode durations vary wildly (an early success finishes in seconds, a
+    # timeout runs the full step budget), so a fixed per-worker slice leaves fast
+    # workers idle at the end while one straggler finishes. When the parent hands
+    # us a shared cursor, pull the next episode on demand instead: every worker
+    # stays busy until the global list is exhausted. Falls back to the static
+    # round-robin slice when running solo or when no cursor was supplied.
+    if episode_cursor is None:
+        _static_iter = iter(global_episode_indices[worker_id::num_workers])
+
+        def claim_next_episode() -> int | None:
+            return next(_static_iter, None)
+    else:
+
+        def claim_next_episode() -> int | None:
+            with episode_cursor.get_lock():
+                cursor = episode_cursor.value
+                if cursor >= len(global_episode_indices):
+                    return None
+                episode_cursor.value = cursor + 1
+            return global_episode_indices[cursor]
+
     print(
-        f"Evaluating {len(episode_indices)} episodes "
+        f"Evaluating up to {len(global_episode_indices)} episodes "
         f"(worker={worker_id}/{num_workers}, requested_total={num_episodes}, "
-        f"assigned={len(episode_indices)})."
+        f"dispatch={'dynamic' if episode_cursor is not None else 'static'})."
     )
-    report("worker_init", total_episodes=len(episode_indices), status="creating_env")
+    report(
+        "worker_init",
+        total_episodes=0,
+        status="creating_env",
+        global_total=len(global_episode_indices),
+    )
 
     setup_start_time = time.perf_counter()
     print(f"Creating environment: {env_id}")
@@ -307,17 +337,27 @@ def _run_eval_worker(
     setup_seconds = time.perf_counter() - setup_start_time
     report(
         "worker_init",
-        total_episodes=len(episode_indices),
+        total_episodes=0,
         status="ready",
         setup_seconds=setup_seconds,
         max_episode_steps=max_episode_steps,
         video_path=eval_output_dir if save_video else None,
+        global_total=len(global_episode_indices),
     )
 
     step_update_every = 5
     stats = defaultdict(bool)
+    claimed = 0
 
-    for eps_idx in episode_indices:
+    while True:
+        eps_idx = claim_next_episode()
+        if eps_idx is None:
+            break
+        # "assigned" is only known as we go under dynamic dispatch, so grow the
+        # worker's denominator each time it claims another episode.
+        claimed += 1
+        report("worker_init", total_episodes=claimed, status="running")
+
         env_conf, episode = get_episode(dataset, eps_idx)  # type: ignore[arg-type]
         task_id = f"episode_{eps_idx}"
         report("episode_start", episode=task_id)
@@ -485,6 +525,9 @@ def run_eval(
     if num_workers == 1 and show_progress:
         terminal_stream = os.fdopen(os.dup(2), "w", buffering=1)
     console = make_console(terminal_stream)
+    # Workers are joined after the Live display stops, and Isaac Sim writes to
+    # this terminal while shutting down; make sure we restore the cursor last.
+    ensure_cursor_restored_at_exit(console)
     worker_states = {wid: WorkerProgress() for wid in range(num_workers)}
     _append_eval_stats_line(eval_dir, "================\n")
     _append_eval_stats_line(eval_dir, f"run: {env_id} - {policy}\n")
@@ -552,6 +595,12 @@ def run_eval(
         progress_readers: dict[int, Any] = {}
         procs: list[mp.Process] = []
         result_dir = Path(tempfile.mkdtemp(prefix="simple_eval_workers_"))
+        # Shared hand-out point into the global episode list. Workers claim the
+        # next index under its lock, so whoever frees up first takes the next
+        # episode rather than sitting idle on an exhausted static slice.
+        episode_cursor = ctx.Value("i", 0)
+        # Total is only known once a worker has opened the dataset; it reports it.
+        global_total: int | None = None
 
         try:
             with Live(
@@ -572,6 +621,7 @@ def run_eval(
                             worker_kwargs,
                             worker_log_paths[wid],
                             send_conn,
+                            episode_cursor,
                         ),
                         name=f"eval-worker-{wid}",
                     )
@@ -596,11 +646,17 @@ def run_eval(
                                     del progress_readers[key]
                                     break
                             continue
+                        if payload.get("global_total") is not None:
+                            global_total = int(payload["global_total"])
                         update_progress(worker_states, wid, payload)
                         if show_progress:
                             live.update(
                                 render_progress(
-                                    env_id, policy, worker_states, log_path
+                                    env_id,
+                                    policy,
+                                    worker_states,
+                                    log_path,
+                                    total_target=global_total,
                                 ),
                                 refresh=False,
                             )

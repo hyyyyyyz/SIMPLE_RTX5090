@@ -102,9 +102,16 @@ We offer three options for setting up SIMPLE:
 
 ## [Option 1] UV setup (Quickest)
 
+
+Prerequisits:
+```
+sudo apt-get update
+sudo apt-get install curl cmake python3-dev
+```
+
 Install `uv` if not already done
 ```bash
-curl -LsSf [https://astral.sh/uv/install.sh](https://astral.sh/uv/install.sh) | sh
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ```
 
@@ -114,6 +121,15 @@ Install all dependencies at once
 UV_HTTP_TIMEOUT=3000 GIT_LFS_SKIP_SMUDGE=1 uv sync --all-groups --index-strategy unsafe-best-match
 
 ```
+
+> **If the sync fails with** `Unable to uninstall lerobot==0.3.3. distutils-installed
+> distributions do not include the metadata required to uninstall safely.` — the `lerobot`
+> wheel ships a stray top-level `lerobot-<ver>.egg-info` file next to its `.dist-info`, and
+> uv reads it as a second, legacy copy of the package. Delete it and re-run the sync:
+>
+> ```
+> rm -f .venv/lib/python3.10/site-packages/lerobot-*.egg-info
+> ```
 
 Install CuRobo
 
@@ -144,6 +160,9 @@ make live
 ```
 
 Open http://127.0.0.1:8005 in a browser to view the documentation.
+
+> See [Installation Troubleshootings](docs/source/troubleshooting.md)
+
 
 > The document are working in progress. Feel free to raise questions using github issue, we will try to complete the document construction as soon as possible.
 

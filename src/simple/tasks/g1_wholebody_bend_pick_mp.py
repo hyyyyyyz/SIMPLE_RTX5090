@@ -141,7 +141,7 @@ class G1WholebodyBendPickMP(Task):
     dr_cfgs: dict[str, RandomizerCfg] = dict(
         language=LanguageDRCfg(
             instructions=[
-                "bend to pick up the {}",
+                "bend to pick up the cracker box",
             ]
         ),
         target=TargetDRCfg(asset_id="graspnet1b:0"),  # e.g., "primitive:cube"

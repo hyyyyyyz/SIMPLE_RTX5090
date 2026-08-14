@@ -8,6 +8,34 @@ import os
 import transforms3d as t3d
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# A repo cloned with GIT_LFS_SKIP_SMUDGE=1, or without git-lfs installed at all,
+# leaves a ~130 byte text pointer where each checkpoint should be. Loading one
+# raises an error that never mentions LFS, so detect it by its magic line.
+_LFS_POINTER_MAGIC = b"version https://git-lfs.github.com/spec/v1"
+
+
+def _ensure_materialized(path):
+    """Raise a diagnostic error if `path` is missing or an unresolved LFS pointer."""
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Missing model checkpoint: {path}")
+    with open(path, "rb") as handle:
+        head = handle.read(len(_LFS_POINTER_MAGIC))
+    if head == _LFS_POINTER_MAGIC:
+        raise RuntimeError(
+            f"{path} is an unresolved Git LFS pointer ({os.path.getsize(path)} bytes) "
+            "rather than the real checkpoint. Install git-lfs and run `git lfs pull` "
+            "from the repo root to download it."
+        )
+
+
+def _load_jit(path, device):
+    """Load a TorchScript checkpoint, reporting *which* file failed and why."""
+    _ensure_materialized(path)
+    try:
+        return torch.jit.load(path, map_location=device)
+    except Exception as exc:  # corrupt/truncated file, torch version mismatch, ...
+        raise RuntimeError(f"Failed to load TorchScript checkpoint {path}: {exc}") from exc
+
 def quatToEuler(quat):
     eulerVec = np.zeros(3)
     qw = quat[0] 
@@ -204,19 +232,20 @@ class AMO_Policy:
         for i in range(self.extra_history_len):
             self.extra_history_buf.append(np.zeros(self.n_proprio))
 
-        try:
-            self.policy_jit = torch.jit.load(os.path.join(BASE_DIR, "amo_jit.pt"), map_location=device)
-            self.adapter = torch.jit.load(os.path.join(BASE_DIR, "adapter_jit.pt"), map_location=device)
-        except RuntimeError:
-            print(f"Error loading JIT models, likely need to run `git lfs pull`.")
-            exit(0)
+        # Let load failures propagate: the eval worker wraps this call and pickles
+        # the traceback back to the parent. Swallowing them and calling exit(0) made
+        # a missing checkpoint look like a clean, successful worker exit.
+        self.policy_jit = _load_jit(os.path.join(BASE_DIR, "amo_jit.pt"), device)
+        self.adapter = _load_jit(os.path.join(BASE_DIR, "adapter_jit.pt"), device)
 
         self.adapter.eval()
 
         for param in self.adapter.parameters():
             param.requires_grad = False
 
-        norm_stats = torch.load(os.path.join(BASE_DIR, "adapter_norm_stats.pt"), weights_only=False)
+        norm_stats_path = os.path.join(BASE_DIR, "adapter_norm_stats.pt")
+        _ensure_materialized(norm_stats_path)
+        norm_stats = torch.load(norm_stats_path, weights_only=False)
         self.input_mean = torch.tensor(norm_stats['input_mean'], device=device, dtype=torch.float32)
         self.input_std = torch.tensor(norm_stats['input_std'], device=device, dtype=torch.float32)
         self.output_mean = torch.tensor(norm_stats['output_mean'], device=device, dtype=torch.float32)

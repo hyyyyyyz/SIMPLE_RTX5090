@@ -137,7 +137,7 @@ class G1WholebodyTurnXMoveAndBendPickMP(Task):
     dr_cfgs: dict[str, RandomizerCfg] = dict(
         language = LanguageDRCfg(
             instructions = [
-                "from the start position, turn and move to the target position and bend to pick up the object,and then hand over it to the left hand.",
+                "turn towards the red box and walk towards it and pick it up.",
             ]
         ),
 
@@ -463,4 +463,3 @@ class G1WholebodyTurnXMoveAndBendPickMP(Task):
 
             
         ]
-

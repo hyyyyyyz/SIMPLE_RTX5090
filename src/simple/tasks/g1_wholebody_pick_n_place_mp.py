@@ -47,6 +47,7 @@ class G1WholebodyPickNPlaceMP(Task):
         "dr_level": 0,
         "version": 1.0,
         "need_gravity": True,
+        "max_episode_steps": 1600,
     }
 
     robot_cfg: dict[str, Any] = dict(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import atexit
 from dataclasses import dataclass
 import os
 import sys
@@ -86,6 +87,65 @@ def restore_cursor(console: Console) -> None:
         pass
 
 
+_saved_tty_attrs: tuple[int, list] | None = None
+
+
+def _snapshot_tty_attrs() -> None:
+    """Remember the terminal's line settings before any child can change them."""
+    global _saved_tty_attrs
+    if _saved_tty_attrs is not None:
+        return
+    try:
+        import termios
+
+        fd = sys.stdin.fileno()
+        if os.isatty(fd):
+            _saved_tty_attrs = (fd, termios.tcgetattr(fd))
+    except Exception:
+        _saved_tty_attrs = None
+
+
+def restore_terminal_modes() -> None:
+    """Undo raw/no-echo modes a child left behind.
+
+    Isaac Sim (via GLFW) puts the controlling terminal into a non-canonical,
+    echo-off mode and does not always restore it, which leaves the shell unable
+    to display anything the user types -- `stty sane` territory. Showing the
+    cursor again is not enough; the line discipline has to be put back too.
+    """
+    if _saved_tty_attrs is None:
+        return
+    fd, attrs = _saved_tty_attrs
+    try:
+        import termios
+
+        termios.tcsetattr(fd, termios.TCSADRAIN, attrs)
+    except Exception:
+        pass
+
+
+def restore_terminal(console: Console) -> None:
+    """Put the terminal back the way we found it: cursor visible, echo on."""
+    restore_cursor(console)
+    restore_terminal_modes()
+
+
+def ensure_cursor_restored_at_exit(console: Console) -> None:
+    """Restore cursor *and* line settings at interpreter exit.
+
+    The parent stops its Live display -- and restores the cursor -- while worker
+    processes are still being joined, and Isaac Sim writes to the same terminal
+    as it tears down. Anything that hides the cursor or disables echo during that
+    shutdown would otherwise win, leaving the terminal cursorless or silent when
+    typed into. Registering here gives us the last word on every exit path:
+    normal return, typer.Exit, an unhandled exception, or Ctrl-C.
+    """
+    _snapshot_tty_attrs()
+    # Keep exactly one registration even if run_eval is invoked repeatedly.
+    atexit.unregister(restore_terminal)
+    atexit.register(restore_terminal, console)
+
+
 def format_episode_label(value: str) -> str:
     if value.startswith("episode_"):
         return f"ep{value.split('_', 1)[1]}"
@@ -143,9 +203,17 @@ def render_progress(
     policy: str,
     worker_states: dict[int, WorkerProgress],
     log_path: str,
+    total_target: int | None = None,
 ) -> Panel:
     total_completed = sum(state.completed_episodes for state in worker_states.values())
-    total_assigned = sum(state.total_episodes for state in worker_states.values())
+    # Under dynamic dispatch a worker's `total_episodes` only counts what it has
+    # claimed so far, so summing them understates the run until the queue drains.
+    # Callers that know the real episode count pass it as `total_target`.
+    total_assigned = (
+        total_target
+        if total_target is not None
+        else sum(state.total_episodes for state in worker_states.values())
+    )
     total_successes = sum(state.successes for state in worker_states.values())
     success_rate = f"{(total_successes / total_completed):.2%}" if total_completed else "n/a"
     setup_values = [state.setup_seconds for state in worker_states.values() if state.setup_seconds is not None]

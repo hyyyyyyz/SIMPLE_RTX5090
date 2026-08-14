@@ -84,7 +84,7 @@ class G1WholebodyXMovePickTaskTeleop(Task):
     dr_cfgs: dict[str, RandomizerCfg] = dict(
         language=LanguageDRCfg(
             instructions=[
-                "move forward to the table and pick up the {}",
+                "move forward to pick up the {}",
             ]
         ),
         target=TargetDRCfg(asset_id="graspnet1b:12"),  # e.g., "primitive:cube"

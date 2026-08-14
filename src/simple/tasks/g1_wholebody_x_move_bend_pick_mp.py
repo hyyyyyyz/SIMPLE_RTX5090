@@ -142,7 +142,7 @@ class G1WholebodyXMoveBendPickMP(Task):
     dr_cfgs: dict[str, RandomizerCfg] = dict(
         language=LanguageDRCfg(
             instructions=[
-                "from the start position, move to the target position and bend the robot to pick up the object.",
+                "walk forward and bend down to pick up the red box.",
             ]
         ),
         target=TargetDRCfg(asset_id="graspnet1b:0"),  # e.g., "primitive:cube"

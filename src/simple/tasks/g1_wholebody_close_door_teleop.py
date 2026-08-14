@@ -60,6 +60,7 @@ class G1WholebodyCloseDoorTaskTeleop(Task):
         "need_gravity": True,
         "max_episode_steps": 1000,
         "success_criteria": 0.5,
+        "max_episode_steps": 450,
         # "debug": True
     }
 

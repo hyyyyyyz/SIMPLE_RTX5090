@@ -45,6 +45,7 @@ class G1WholebodyPickAndBendPlaceMP(Task):
         "dr_level": 0,
         "version": 1.0,
         "need_gravity": True,
+        "max_episode_steps": 1000,
     }
 
     robot_cfg: dict[str, Any] = dict(
@@ -130,7 +131,7 @@ class G1WholebodyPickAndBendPlaceMP(Task):
     dr_cfgs: dict[str, RandomizerCfg] = dict(
         language = LanguageDRCfg(
             instructions = [
-                "pick the object from table1, locomote to table2, and place it on table2.",
+                "pick up the cracker box, turn 180, and drop it in the cushion.",
             ]
         ),
 
@@ -492,4 +493,3 @@ class G1WholebodyPickAndBendPlaceMP(Task):
             OpenGripperSpec("release", hand_uid="dex3_right"),
             StandSpec("stop"),
         ]
-

@@ -82,7 +82,7 @@ class G1WholebodyBendHandoverTeleop(Task):
     dr_cfgs: dict[str, RandomizerCfg] = dict(
         language = LanguageDRCfg(
             instructions = [
-                "bend and pick up {} using right hand and hand it to the left hand, then place it on the container.",
+                "bend the robot and pick up the {}, then place it on the container.",
             ]
         ),
 
@@ -413,4 +413,3 @@ class G1WholebodyBendHandoverTeleop(Task):
 
             
         ]
-

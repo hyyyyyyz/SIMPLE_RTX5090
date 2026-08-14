@@ -49,6 +49,7 @@ class G1WholebodyXMoveAndHandoverMP(Task):
         "dr_level": 0,
         "version": 1.0,
         "need_gravity": True,
+        "max_episode_steps": 700,
     }
 
     robot_cfg: dict[str, Any] = dict(
@@ -137,7 +138,7 @@ class G1WholebodyXMoveAndHandoverMP(Task):
     dr_cfgs: dict[str, RandomizerCfg] = dict(
         language = LanguageDRCfg(
             instructions = [
-                "from the start position, move to the target position and pick up the object, then hand it to the left hand.",
+                "move forward and grasp the cracker box and hand it over.",
             ]
         ),
 
@@ -439,4 +440,3 @@ class G1WholebodyXMoveAndHandoverMP(Task):
 
             
         ]
-

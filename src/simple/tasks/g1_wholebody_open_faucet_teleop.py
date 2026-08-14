@@ -87,7 +87,7 @@ class G1WholebodyOpenFaucetTaskTeleop(Task):
     dr_cfgs: dict[str, RandomizerCfg] = dict(
         language=LanguageDRCfg(
             instructions=[
-                "move forward to the faucet and open it",
+                "turn the faucet",
             ]
         ),
         target=TargetDRCfg(asset_id="graspnet1b:12"),  # e.g., "primitive:cube"

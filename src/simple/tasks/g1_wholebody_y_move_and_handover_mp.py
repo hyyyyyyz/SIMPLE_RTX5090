@@ -137,7 +137,7 @@ class G1WholebodyYMoveAndHandoverMP(Task):
     dr_cfgs: dict[str, RandomizerCfg] = dict(
         language = LanguageDRCfg(
             instructions = [
-                "from the start position, move to the target position and pick up the object, then hand it to the left hand.",
+                "move right to the object and pick it up.",
             ]
         ),
 
@@ -439,4 +439,3 @@ class G1WholebodyYMoveAndHandoverMP(Task):
 
             
         ]
-

@@ -137,7 +137,7 @@ class G1WholebodyTurnYMoveAndPickMP(Task):
     dr_cfgs: dict[str, RandomizerCfg] = dict(
         language = LanguageDRCfg(
             instructions = [
-                "from the start position, turn and move to the target position and pick up the object.",
+                "sliding to the left and grasp the chip can.",
             ]
         ),
 
@@ -458,4 +458,3 @@ class G1WholebodyTurnYMoveAndPickMP(Task):
 
             
         ]
-

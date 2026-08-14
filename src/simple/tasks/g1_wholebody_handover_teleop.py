@@ -81,7 +81,6 @@ class G1WholebodyHandoverTeleop(Task):
         language = LanguageDRCfg(
             instructions = [
                 "Hand over {} from right hand to left hand and place it on the container.",
-                "Pass {} from right arm to left arm and place it on the container.",
             ]
         ),
 

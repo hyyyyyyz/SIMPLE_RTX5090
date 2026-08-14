@@ -112,6 +112,15 @@ sonic = [
 #default-groups = ["sonic"]
 index-strategy = "unsafe-best-match"
 
+# xrobotoolkit-sdk has no pyproject.toml, so it builds with legacy setuptools in an
+# isolated env that would otherwise only contain setuptools+wheel. Its CMakeLists.txt
+# does `find_package(pybind11 REQUIRED)` and setup.py passes no -Dpybind11_DIR, so the
+# build env needs pybind11 installed at its *prefix* (share/cmake/pybind11) -- which is
+# what pybind11-global does, and where CMake looks by default. The plain `pybind11`
+# wheel only ships its config inside site-packages and would NOT be found.
+[tool.uv.extra-build-dependencies]
+xrobotoolkit-sdk = ["pybind11-global>=2.12"]
+
 [tool.uv.sources]
 evdev = { path = "third_party/evdev" }
 simple = {path = ".", editable = true }
