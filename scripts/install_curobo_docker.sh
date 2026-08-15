@@ -146,6 +146,15 @@ fi
 echo "Using TORCH_CUDA_ARCH_LIST: $TORCH_CUDA_ARCH_LIST"
 echo "Using Python environment at: $VENV_PYTHON"
 
+# cuRobo declares its build deps (setuptools_scm>=6.2), but we build with
+# --no-build-isolation, so they must already be present in the venv rather than
+# in an isolated build env. setuptools_scm 9+ moved Configuration into a separate
+# `vcs-versioning` distribution; whatever pulls setuptools_scm into this venv
+# leaves that unsatisfied, so the build dies with "No module named
+# 'vcs_versioning'". Pin below the split (highest pre-split release is 8.3.1).
+echo "🔧 Provisioning cuRobo build dependencies into the venv..."
+uv pip install --python "$VENV_PYTHON" "setuptools>=45" "setuptools_scm<9" wheel
+
 uv pip install --python "$VENV_PYTHON" --no-build-isolation -e 'third_party/curobo[isaacsim]'
 
 echo "🛠️ Fix warp-lang version"
