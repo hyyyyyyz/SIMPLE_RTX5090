@@ -268,6 +268,7 @@ class IsaacSimSimulator(Simulator):
         self.__update_scene()
         self.__update_robot()
         self.__update_cameras()
+        self.__bind_viewport_camera()
         self.__update_lights()
         self.update_visuals()
         
@@ -366,6 +367,21 @@ class IsaacSimSimulator(Simulator):
                 SceneManager.get(scene.uid.split(":")[0]).load(scene.uid)
                 data_dir = resolve_data_path(scene.data_dir)
 
+            # HSSD scene USDs contain root-style references such as
+            # @/props/foo.usd@. Make the scene-local asset folders resolvable
+            # before adding the stage reference. This is especially important
+            # in containers, where the original export-time root is absent.
+            for folder in ("props", "textures"):
+                source = os.path.abspath(os.path.join(data_dir, folder))
+                alias = os.path.join(os.sep, folder)
+                if not os.path.isdir(source) or os.path.lexists(alias):
+                    continue
+                try:
+                    os.symlink(source, alias, target_is_directory=True)
+                    print(f"HSSD: linked {alias} -> {source}")
+                except OSError as exc:
+                    print(f"HSSD: could not link {alias} -> {source}: {exc}")
+
             env_url = os.path.abspath(f"{data_dir}/{scene.name}.usd")
             isaacsim_stage.add_reference_to_stage(usd_path=env_url, prim_path=scene_prim_path)
             scene_prim = self.world.stage.GetPrimAtPath(scene_prim_path)
@@ -429,6 +445,26 @@ class IsaacSimSimulator(Simulator):
         table2_box = self.task.layout.actors.get("table2")
         if table2_box is not None:
             self._setup_table(f"{self.workspace_prim_path}/table2_cuboid", table2_box)
+
+    def __bind_viewport_camera(self) -> None:
+        """Show SIMPLE's front camera in the interactive Isaac viewport."""
+        if self.headless or not self.cameras:
+            return
+        try:
+            from omni.kit.viewport.utility import get_active_viewport
+
+            viewport = get_active_viewport()
+            if viewport is None:
+                return
+            camera = self.cameras.get("front_stereo_left")
+            if camera is None:
+                camera = next(iter(self.cameras.values()))
+            camera_path = getattr(camera, "prim_path", None)
+            if camera_path is not None:
+                viewport.camera_path = str(camera_path)
+        except Exception as exc:
+            # Viewport APIs differ across Kit releases; GUI binding is optional.
+            print(f"Warning: could not bind Isaac viewport camera: {exc}")
 
     def __update_cameras(self):
         for cname, cameraEntity in self.task.layout.cameras.items():

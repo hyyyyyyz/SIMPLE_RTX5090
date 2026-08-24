@@ -81,6 +81,19 @@ class HssdSceneManager(SceneManager):
         scene_dir = resolve_data_path(f"scenes/hssd/{scene_name}",auto_download=True)
         usd_path = os.path.join(scene_dir, f"{scene_name}.usd")
         self._hack_fix_tmp_paths(usd_path)
+
+        # HSSD USD files use root-style references such as @/props/foo.usd@.
+        # Expose the scene asset folders at the resolver root when possible.
+        for folder in ("props", "textures"):
+            source = os.path.abspath(os.path.join(scene_dir, folder))
+            alias = os.path.join(os.sep, folder)
+            if not os.path.isdir(source) or os.path.lexists(alias):
+                continue
+            try:
+                os.symlink(source, alias, target_is_directory=True)
+                print(f"HSSD: linked {alias} -> {source}")
+            except OSError as exc:
+                print(f"HSSD: could not link {alias} -> {source}: {exc}")
         
         return HssdSuite(hssd_scenes_dict[scene_uid])
 
