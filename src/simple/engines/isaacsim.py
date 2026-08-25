@@ -447,8 +447,19 @@ class IsaacSimSimulator(Simulator):
             self._setup_table(f"{self.workspace_prim_path}/table2_cuboid", table2_box)
 
     def __bind_viewport_camera(self) -> None:
-        """Show SIMPLE's front camera in the interactive Isaac viewport."""
-        if self.headless or not self.cameras:
+        """Optionally show SIMPLE's front camera in the interactive viewport.
+
+        Isaac Sim 4.5 on RTX 5090 can invalidate the interactive viewport
+        render target when it is rebound while Replicator cameras are being
+        initialized. Camera capture and simulation do not require this GUI
+        binding, so keep it opt-in. Set ``SIMPLE_ISAAC_BIND_VIEWPORT_CAMERA=1``
+        when the task camera should explicitly drive the viewport.
+        """
+        if (
+            self.headless
+            or not self.cameras
+            or not env_flag("SIMPLE_ISAAC_BIND_VIEWPORT_CAMERA", default=False)
+        ):
             return
         try:
             from omni.kit.viewport.utility import get_active_viewport
