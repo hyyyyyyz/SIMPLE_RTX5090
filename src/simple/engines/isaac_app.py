@@ -30,6 +30,7 @@ def create_simulation_app(
     experience = os.getenv("SIMPLE_ISAAC_EXPERIENCE", "").strip()
     zero_delay = env_flag("SIMPLE_ISAAC_ZERO_DELAY", default=True)
     disable_throttling_async = env_flag("SIMPLE_ISAAC_DISABLE_THROTTLING_ASYNC", default=True)
+    skip_viewport_wait = env_flag("SIMPLE_ISAAC_SKIP_VIEWPORT_WAIT", default=False)
 
     settings: list[tuple[str, object, object]] = []
     if zero_delay:
@@ -52,7 +53,21 @@ def create_simulation_app(
     if extra_args:
         sim_cfg["extra_args"] = extra_args
 
-    app = SimulationApp(sim_cfg)
+    if skip_viewport_wait:
+        # Isaac Sim 4.5 waits for a viewport handle inside SimulationApp's
+        # constructor. On RTX 5090/X11 this can take minutes even though Kit
+        # is already ready. Sensors and headless capture do not need it.
+        class _NoViewportWaitSimulationApp(SimulationApp):
+            def _wait_for_viewport(self):
+                # Keep the standard post-startup frames, but avoid waiting
+                # indefinitely for a viewport handle that may be delayed by
+                # the RTX 5090/X11 combination.
+                for _ in range(10):
+                    self._app.update()
+
+        app = _NoViewportWaitSimulationApp(sim_cfg)
+    else:
+        app = SimulationApp(sim_cfg)
 
     for key, _, runtime_value in settings:
         app.set_setting(key, runtime_value)
