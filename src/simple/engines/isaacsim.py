@@ -431,7 +431,11 @@ class IsaacSimSimulator(Simulator):
                 surface2_prim.GetAttribute("visibility").Set("invisible")
 
         ceiling = scene_prim.GetPrimAtPath(f"{scene_prim_path}/ceilings")
-        ceiling.GetAttribute("visibility").Set("visible") # hide ceiling for better visualization
+        # Keep the room ceiling out of the interactive view so it does not
+        # occlude the task lights. The old value was ``visible`` despite the
+        # comment saying to hide it; after layout initialization this made the
+        # GUI viewport become almost black while cameras still saw silhouettes.
+        ceiling.GetAttribute("visibility").Set("invisible")
 
         if move_surface_to_origin:
             surface_center_position = - surface_obb["position"] + \
