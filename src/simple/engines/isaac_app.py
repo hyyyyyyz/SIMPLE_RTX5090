@@ -28,6 +28,7 @@ def create_simulation_app(
     multi_gpu: bool = False,
 ):
     experience = os.getenv("SIMPLE_ISAAC_EXPERIENCE", "").strip()
+    renderer = os.getenv("SIMPLE_ISAAC_RENDERER", renderer).strip() or renderer
     zero_delay = env_flag("SIMPLE_ISAAC_ZERO_DELAY", default=True)
     disable_throttling_async = env_flag("SIMPLE_ISAAC_DISABLE_THROTTLING_ASYNC", default=True)
     skip_viewport_wait = env_flag("SIMPLE_ISAAC_SKIP_VIEWPORT_WAIT", default=False)
