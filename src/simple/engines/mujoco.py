@@ -690,8 +690,11 @@ class MujocoSimulator(Simulator):
             mask_camera_name = "front_stereo_left"
 
         robot_geom_ids = self._robot_mask_geom_ids() if mask_camera_name is not None else set()
-        for mjCamera in self.mj_worldbody.find_all('camera'):
-            renderer = self.renderers[mjCamera.name]
+        # Render only cameras declared by the task. Robot MJCF files can also
+        # contain auxiliary cameras (for example ALOHA's
+        # ``teleoperator_pov``) that are not observation cameras and therefore
+        # do not have a renderer entry.
+        for camera_name, renderer in self.renderers.items():
             if renderer is None:
                 continue
             
@@ -699,15 +702,15 @@ class MujocoSimulator(Simulator):
             renderer.update_scene(
                 self.mjData, 
                 scene_option=self.render_option, 
-                camera=mjCamera.name
+                camera=camera_name
             )
             # with self._telemetry.timer(f"render.render.{mjCamera.name}"):
             render_product = renderer.render()
             color = render_product[..., :3].astype(np.uint8) if render_product.dtype != np.uint8 else render_product[..., :3]
-            image_observations[mjCamera.name] = color
+            image_observations[camera_name] = color
 
             # with self._telemetry.timer(f"render.mask.{mjCamera.name}"):
-            if render_robot_mask and mjCamera.name == "front_stereo_left": # FIXME:
+            if render_robot_mask and camera_name == "front_stereo_left": # FIXME:
                 renderer.enable_segmentation_rendering()
                 try:
                     out = renderer.render()[...,0]
