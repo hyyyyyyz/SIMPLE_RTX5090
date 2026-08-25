@@ -233,8 +233,13 @@ class IsaacSimSimulator(Simulator):
         self.is_isaac_reset = False
 
     def _config_isaac(self):
+        # Isaac Sim 4.5/RTX 5090 can produce an extremely dark real-time
+        # viewport when sampled direct lighting is disabled. Keep the
+        # historical default for reproducibility, but allow a GUI-only A/B
+        # test without changing simulation or camera capture code.
+        sampled_lighting = env_flag("SIMPLE_ISAAC_ENABLE_SAMPLED_LIGHTING", default=False)
         success, result = omni.kit.commands.execute('ChangeSetting',
-            path='/rtx/directLighting/sampledLighting/autoEnable', value=False
+            path='/rtx/directLighting/sampledLighting/autoEnable', value=sampled_lighting
         )
         if not success:
             print("warning: set autoEnable sampleed lighting falied", result)
