@@ -456,18 +456,18 @@ class IsaacSimSimulator(Simulator):
             self._setup_table(f"{self.workspace_prim_path}/table2_cuboid", table2_box)
 
     def __bind_viewport_camera(self) -> None:
-        """Optionally show SIMPLE's front camera in the interactive viewport.
+        """Show SIMPLE's front camera in the interactive viewport by default.
 
         Isaac Sim 4.5 on RTX 5090 can invalidate the interactive viewport
         render target when it is rebound while Replicator cameras are being
         initialized. Camera capture and simulation do not require this GUI
-        binding, so keep it opt-in. Set ``SIMPLE_ISAAC_BIND_VIEWPORT_CAMERA=1``
-        when the task camera should explicitly drive the viewport.
+        binding, but the requested default GUI view is ``front_stereo_left``.
+        Set ``SIMPLE_ISAAC_BIND_VIEWPORT_CAMERA=0`` to keep Isaac's free camera.
         """
         if (
             self.headless
             or not self.cameras
-            or not env_flag("SIMPLE_ISAAC_BIND_VIEWPORT_CAMERA", default=False)
+            or not env_flag("SIMPLE_ISAAC_BIND_VIEWPORT_CAMERA", default=True)
         ):
             return
         try:
